@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Sugar Operations</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue: #2563eb;
+      --green: #16a34a;
+      --red: #dc2626;
+      --amber: #f59e0b;
+      --gray: #64748b;
+      --light: #f1f5f9;
+      --white: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --muted: #94a3b8;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--light);
+      color: var(--text);
+      padding-bottom: 70px;
+    }
+
+    /* ===== TOP NAV TABS ===== */
+    .tab-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--white);
+      display: flex;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 14px 8px;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+      background: none;
+      border: none;
+      color: var(--gray);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      -webkit-appearance: none;
+    }
+
+    .tab-btn.active {
+      color: var(--blue);
+      border-bottom-color: var(--blue);
+    }
+
+    .tab-content { display: none; padding: 16px; }
+    .tab-content.active { display: block; }
+
+    /* ===== SHARED STYLES ===== */
+    .card {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .btn {
+      display: inline-block;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      -webkit-appearance: none;
+      text-align: center;
+    }
+
+    .btn-blue { background: var(--blue); color: #fff; }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-red { background: var(--red); color: #fff; }
+    .btn-gray { background: var(--border); color: var(--text); }
+    .btn-full { width: 100%; }
+
+    .btn:active { opacity: 0.85; }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 4px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      font-size: 16px;
+      padding: 10px 12px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: #f8fafc;
+      color: var(--text);
+      -webkit-appearance: none;
+      appearance: none;
+      margin-bottom: 12px;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--blue);
+      background: #fff;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+
+    .badge-scheduled { background: #e2e8f0; color: #475569; }
+    .badge-loaded { background: #dcfce7; color: #166534; }
+    .badge-missed { background: #fee2e2; color: #991b1b; }
+    .badge-buyer-rocky { background: #dbeafe; color: #1e40af; }
+    .badge-buyer-marco { background: #fef3c7; color: #92400e; }
+
+    .text-muted { color: var(--muted); font-size: 13px; }
+    .text-center { text-align: center; }
+    .mb-12 { margin-bottom: 12px; }
+    .mb-16 { margin-bottom: 16px; }
+    .mt-8 { margin-top: 8px; }
+    .mt-16 { margin-top: 16px; }
+
+    /* ===== DAILY BOARD ===== */
+    .day-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+    }
+
+    .day-nav button {
+      background: var(--white);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-appearance: none;
+    }
+
+    .day-nav .day-label {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .summary-strip {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .summary-item {
+      flex: 1;
+      min-width: 70px;
+      text-align: center;
+      padding: 10px 6px;
+      border-radius: 10px;
+      background: var(--white);
+      border: 2px solid var(--border);
+    }
+
+    .summary-item .num {
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .summary-item .lbl {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gray);
+      text-transform: uppercase;
+    }
+
+    .summary-item.loaded { border-color: var(--green); }
+    .summary-item.loaded .num { color: var(--green); }
+    .summary-item.missed { border-color: var(--red); }
+    .summary-item.missed .num { color: var(--red); }
+
+    .time-slot-header {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--gray);
+      padding: 8px 0 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+      margin-top: 12px;
+    }
+
+    .truck-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: var(--white);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      border: 2px solid var(--border);
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .truck-card.status-loaded { border-color: var(--green); background: #f0fdf4; }
+    .truck-card.status-missed { border-color: var(--red); background: #fef2f2; }
+
+    .truck-card .truck-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .truck-card .truck-top {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+
+    .truck-card .truck-code {
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .truck-card .truck-detail {
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    .truck-card .truck-status {
+      flex-shrink: 0;
+    }
+
+    /* ===== MODAL / BOTTOM SHEET ===== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 200;
+    }
+
+    .modal-overlay.show { display: flex; align-items: flex-end; }
+
+    .modal-sheet {
+      background: var(--white);
+      border-radius: 16px 16px 0 0;
+      padding: 20px 16px 32px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-sheet h3 {
+      font-size: 18px;
+      margin-bottom: 16px;
+    }
+
+    .modal-sheet .btn { margin-bottom: 10px; }
+
+    .modal-handle {
+      width: 40px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 0 auto 16px;
+    }
+
+    /* ===== SCHEDULE TAB ===== */
+    .cal-strip {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 8px 0 16px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .cal-day {
+      flex-shrink: 0;
+      width: 64px;
+      text-align: center;
+      padding: 8px 4px;
+      border-radius: 10px;
+      border: 2px solid var(--border);
+      background: var(--white);
+      cursor: pointer;
+      -webkit-appearance: none;
+    }
+
+    .cal-day.active { border-color: var(--blue); background: #eff6ff; }
+    .cal-day.today { border-color: var(--amber); }
+
+    .cal-day .cal-dow { font-size: 11px; color: var(--gray); font-weight: 600; }
+    .cal-day .cal-date { font-size: 18px; font-weight: 800; }
+    .cal-day .cal-count { font-size: 11px; color: var(--blue); font-weight: 600; }
+
+    .slot-row {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      background: var(--white);
+      border: 1px solid var(--border);
+    }
+
+    .slot-time { font-weight: 700; width: 55px; font-size: 14px; }
+    .slot-fill { flex: 1; font-size: 13px; color: var(--gray); }
+    .slot-count {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .slot-count.full { background: #dcfce7; color: #166534; }
+    .slot-count.partial { background: #fef3c7; color: #92400e; }
+    .slot-count.empty { background: #f1f5f9; color: #64748b; }
+
+    /* ===== OVERVIEW TAB ===== */
+    .progress-section {
+      text-align: center;
+      padding: 20px 16px;
+    }
+
+    .progress-big-num {
+      font-size: 42px;
+      font-weight: 800;
+      color: var(--blue);
+    }
+
+    .progress-label {
+      font-size: 14px;
+      color: var(--gray);
+      margin-bottom: 12px;
+    }
+
+    .progress-bar-lg {
+      height: 14px;
+      background: var(--border);
+      border-radius: 7px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar-lg .fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 7px;
+      transition: width 0.5s;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stat-card {
+      text-align: center;
+      padding: 14px 10px;
+    }
+
+    .stat-card .stat-num {
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .stat-card .stat-label {
+      font-size: 12px;
+      color: var(--gray);
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .buyer-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .buyer-bar .buyer-name {
+      font-weight: 700;
+      width: 60px;
+      font-size: 14px;
+    }
+
+    .buyer-bar .buyer-progress {
+      flex: 1;
+      height: 10px;
+      background: var(--border);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .buyer-bar .buyer-fill {
+      height: 100%;
+      border-radius: 5px;
+    }
+
+    .buyer-bar .buyer-count {
+      font-size: 13px;
+      font-weight: 600;
+      width: 80px;
+      text-align: right;
+    }
+
+    .history-row {
+      display: flex;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    .history-row .h-date { flex: 1; font-weight: 600; }
+    .history-row .h-loaded { width: 60px; text-align: center; color: var(--green); font-weight: 700; }
+    .history-row .h-missed { width: 60px; text-align: center; color: var(--red); font-weight: 700; }
+    .history-row .h-total { width: 50px; text-align: center; font-weight: 600; }
+
+    /* ===== FLOATING ACTION BUTTON ===== */
+    .fab {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      font-size: 28px;
+      line-height: 56px;
+      text-align: center;
+      border: none;
+      box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+      cursor: pointer;
+      z-index: 50;
+      -webkit-appearance: none;
+    }
+
+    .fab:active { background: #1d4ed8; }
+
+    /* ===== EXPORT BAR ===== */
+    .export-bar {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .export-bar button {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      -webkit-appearance: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('daily')">Daily Board</button>
+  <button class="tab-btn" onclick="switchTab('schedule')">Schedule</button>
+  <button class="tab-btn" onclick="switchTab('overview')">Overview</button>
+</div>
+
+<!-- ===== TAB 1: DAILY BOARD ===== -->
+<div id="tab-daily" class="tab-content active">
+  <div class="day-nav">
+    <button onclick="changeDay(-1)">&lt; Prev</button>
+    <span class="day-label" id="dayLabel"></span>
+    <button onclick="changeDay(1)">Next &gt;</button>
+  </div>
+
+  <div class="summary-strip" id="dailySummary"></div>
+
+  <div id="dailyTrucks"></div>
+
+  <div class="export-bar">
+    <button class="btn-green" onclick="exportDailyReport()" style="flex:1">End of Day Report</button>
+    <button class="btn-gray" onclick="textDailyReport()" style="flex:1">Text Report</button>
+  </div>
+</div>
+
+<!-- ===== TAB 2: SCHEDULE ===== -->
+<div id="tab-schedule" class="tab-content">
+  <div class="cal-strip" id="calStrip"></div>
+
+  <div id="scheduleView"></div>
+
+  <div class="export-bar mt-16">
+    <button class="btn-blue" onclick="generateSubmission()" style="flex:1">Generate Submission</button>
+    <button class="btn-gray" onclick="showBulkAdd()" style="flex:1">+ Bulk Add</button>
+  </div>
+</div>
+
+<!-- ===== TAB 3: OVERVIEW ===== -->
+<div id="tab-overview" class="tab-content">
+  <div id="overviewContent"></div>
+</div>
+
+<!-- FLOATING ADD BUTTON -->
+<button class="fab" id="fabBtn" onclick="showAddTruck()">+</button>
+
+<!-- MODAL: ADD TRUCK -->
+<div class="modal-overlay" id="addTruckModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3>Add Truck</h3>
+    <label>Buyer</label>
+    <select id="addBuyer">
+      <option value="Rocky">Rocky</option>
+      <option value="Marco">Marco</option>
+    </select>
+    <label>Date</label>
+    <input type="date" id="addDate">
+    <label>Time Slot</label>
+    <select id="addTimeSlot"></select>
+    <label>Appointment Code</label>
+    <input type="text" id="addCode" placeholder="e.g. WH-001">
+    <label>Truck Number</label>
+    <input type="text" id="addTruckNum" placeholder="e.g. T-1158">
+    <label>Driver Name</label>
+    <input type="text" id="addDriver" placeholder="e.g. John Smith">
+    <label>Driver Phone</label>
+    <input type="text" id="addPhone" placeholder="e.g. 555-0101">
+    <label>Carrier</label>
+    <input type="text" id="addCarrier" placeholder="e.g. ABC Transport">
+    <button class="btn btn-blue btn-full" onclick="addTruck()">Add Truck</button>
+    <button class="btn btn-gray btn-full mt-8" onclick="closeModal('addTruckModal')">Cancel</button>
+  </div>
+</div>
+
+<!-- MODAL: TRUCK DETAIL -->
+<div class="modal-overlay" id="truckDetailModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 id="detailTitle">Truck Details</h3>
+    <div id="detailContent"></div>
+    <button class="btn btn-green btn-full" onclick="setStatus('Loaded')">Mark Loaded</button>
+    <button class="btn btn-red btn-full" onclick="setStatus('Missed')">Mark Missed</button>
+    <button class="btn btn-gray btn-full" onclick="setStatus('Scheduled')">Reset to Scheduled</button>
+    <div class="mt-16">
+      <label>Notes</label>
+      <textarea id="detailNotes" rows="2" placeholder="Add notes..."></textarea>
+      <button class="btn btn-blue btn-full" onclick="saveNotes()">Save Notes</button>
+    </div>
+    <button class="btn btn-gray btn-full mt-16" onclick="closeModal('truckDetailModal')">Close</button>
+  </div>
+</div>
+
+<!-- MODAL: BULK ADD -->
+<div class="modal-overlay" id="bulkAddModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3>Bulk Add Trucks</h3>
+    <label>Buyer</label>
+    <select id="bulkBuyer">
+      <option value="Rocky">Rocky</option>
+      <option value="Marco">Marco</option>
+    </select>
+    <label>Date</label>
+    <input type="date" id="bulkDate">
+    <label>Time Slot</label>
+    <select id="bulkTimeSlot"></select>
+    <label>Number of Trucks</label>
+    <input type="number" id="bulkCount" value="8" inputmode="numeric">
+    <button class="btn btn-blue btn-full" onclick="bulkAdd()">Add Trucks</button>
+    <button class="btn btn-gray btn-full mt-8" onclick="closeModal('bulkAddModal')">Cancel</button>
+  </div>
+</div>
+
+<script>
+// ===== CONFIG (PLACEHOLDER - will be replaced with real warehouse data) =====
+var CONFIG = {
+  totalTrucks: 500,
+  trucksPerSlot: 8,
+  timeSlots: ["07:00","08:00","09:00","10:00","11:00","13:00","14:00","15:00","16:00","17:00"],
+  buyers: {
+    "Rocky": { total: 300, color: "#3b82f6" },
+    "Marco": { total: 200, color: "#f59e0b" }
+  }
+};
+
+// ===== DATA STORE =====
+var trucks = [];
+var currentDate = new Date();
+var selectedTruckId = null;
+var scheduleDate = new Date();
+
+function todayStr() { return formatDate(new Date()); }
+function formatDate(d) {
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function prettyDate(str) {
+  var d = new Date(str + "T12:00:00");
+  var days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return days[d.getDay()] + ", " + months[d.getMonth()] + " " + d.getDate();
+}
+
+function loadData() {
+  try {
+    var s = localStorage.getItem("sugar_ops_trucks");
+    if (s) trucks = JSON.parse(s);
+  } catch(e) {}
+}
+
+function saveData() {
+  localStorage.setItem("sugar_ops_trucks", JSON.stringify(trucks));
+}
+
+function nextId() {
+  var max = 0;
+  trucks.forEach(function(t) { if (t.id > max) max = t.id; });
+  return max + 1;
+}
+
+// ===== TAB SWITCHING =====
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+
+  if (name === 'daily') renderDaily();
+  if (name === 'schedule') renderSchedule();
+  if (name === 'overview') renderOverview();
+
+  document.getElementById('fabBtn').style.display = (name === 'daily' || name === 'schedule') ? 'block' : 'none';
+}
+
+// ===== DAILY BOARD =====
+function changeDay(offset) {
+  currentDate.setDate(currentDate.getDate() + offset);
+  renderDaily();
+}
+
+function renderDaily() {
+  var dateStr = formatDate(currentDate);
+  document.getElementById('dayLabel').textContent = prettyDate(dateStr);
+
+  var dayTrucks = trucks.filter(function(t) { return t.date === dateStr; });
+  dayTrucks.sort(function(a, b) { return a.timeSlot < b.timeSlot ? -1 : a.timeSlot > b.timeSlot ? 1 : 0; });
+
+  var loaded = dayTrucks.filter(function(t) { return t.status === 'Loaded'; }).length;
+  var missed = dayTrucks.filter(function(t) { return t.status === 'Missed'; }).length;
+  var remaining = dayTrucks.length - loaded - missed;
+
+  document.getElementById('dailySummary').innerHTML =
+    '<div class="summary-item loaded"><div class="num">' + loaded + '</div><div class="lbl">Loaded</div></div>' +
+    '<div class="summary-item missed"><div class="num">' + missed + '</div><div class="lbl">Missed</div></div>' +
+    '<div class="summary-item"><div class="num">' + remaining + '</div><div class="lbl">Remaining</div></div>' +
+    '<div class="summary-item"><div class="num">' + dayTrucks.length + '</div><div class="lbl">Total</div></div>';
+
+  var html = '';
+  var lastSlot = '';
+
+  if (dayTrucks.length === 0) {
+    html = '<div class="text-center text-muted" style="padding:40px 0">No trucks scheduled for this day.<br>Tap + to add trucks.</div>';
+  }
+
+  dayTrucks.forEach(function(t) {
+    if (t.timeSlot !== lastSlot) {
+      html += '<div class="time-slot-header">' + t.timeSlot + '</div>';
+      lastSlot = t.timeSlot;
+    }
+
+    var statusClass = t.status === 'Loaded' ? 'status-loaded' : t.status === 'Missed' ? 'status-missed' : '';
+    var buyerClass = t.buyer === 'Rocky' ? 'badge-buyer-rocky' : 'badge-buyer-marco';
+    var statusBadge = t.status === 'Loaded' ? 'badge-loaded' : t.status === 'Missed' ? 'badge-missed' : 'badge-scheduled';
+
+    html += '<div class="truck-card ' + statusClass + '" onclick="openTruckDetail(' + t.id + ')">';
+    html += '<div class="truck-info">';
+    html += '<div class="truck-top">';
+    html += '<span class="badge ' + buyerClass + '">' + t.buyer + '</span> ';
+    html += '<span class="truck-code">' + (t.code || '—') + '</span>';
+    html += '</div>';
+    html += '<div class="truck-detail">' + (t.truckNum || 'No truck #') + ' &middot; ' + (t.driver || 'No driver') + '</div>';
+    html += '</div>';
+    html += '<div class="truck-status"><span class="badge ' + statusBadge + '">' + t.status + '</span></div>';
+    html += '</div>';
+  });
+
+  document.getElementById('dailyTrucks').innerHTML = html;
+}
+
+// ===== TRUCK DETAIL MODAL =====
+function openTruckDetail(id) {
+  selectedTruckId = id;
+  var t = trucks.find(function(x) { return x.id === id; });
+  if (!t) return;
+
+  document.getElementById('detailTitle').textContent = (t.code || 'Truck') + ' - ' + t.buyer;
+  document.getElementById('detailContent').innerHTML =
+    '<div class="card">' +
+    '<div><strong>Code:</strong> ' + (t.code || '—') + '</div>' +
+    '<div><strong>Buyer:</strong> ' + t.buyer + '</div>' +
+    '<div><strong>Date:</strong> ' + prettyDate(t.date) + '</div>' +
+    '<div><strong>Time Slot:</strong> ' + t.timeSlot + '</div>' +
+    '<div><strong>Truck #:</strong> ' + (t.truckNum || '—') + '</div>' +
+    '<div><strong>Driver:</strong> ' + (t.driver || '—') + '</div>' +
+    '<div><strong>Phone:</strong> ' + (t.phone || '—') + '</div>' +
+    '<div><strong>Carrier:</strong> ' + (t.carrier || '—') + '</div>' +
+    '<div><strong>Status:</strong> ' + t.status + '</div>' +
+    (t.notes ? '<div><strong>Notes:</strong> ' + t.notes + '</div>' : '') +
+    '</div>';
+  document.getElementById('detailNotes').value = t.notes || '';
+  document.getElementById('truckDetailModal').classList.add('show');
+}
+
+function setStatus(status) {
+  var t = trucks.find(function(x) { return x.id === selectedTruckId; });
+  if (t) {
+    t.status = status;
+    saveData();
+  }
+  closeModal('truckDetailModal');
+  renderDaily();
+}
+
+function saveNotes() {
+  var t = trucks.find(function(x) { return x.id === selectedTruckId; });
+  if (t) {
+    t.notes = document.getElementById('detailNotes').value;
+    saveData();
+  }
+  closeModal('truckDetailModal');
+  renderDaily();
+}
+
+// ===== ADD TRUCK =====
+function showAddTruck() {
+  document.getElementById('addDate').value = formatDate(currentDate);
+  populateTimeSlots('addTimeSlot');
+  document.getElementById('addCode').value = '';
+  document.getElementById('addTruckNum').value = '';
+  document.getElementById('addDriver').value = '';
+  document.getElementById('addPhone').value = '';
+  document.getElementById('addCarrier').value = '';
+  document.getElementById('addTruckModal').classList.add('show');
+}
+
+function addTruck() {
+  var t = {
+    id: nextId(),
+    buyer: document.getElementById('addBuyer').value,
+    date: document.getElementById('addDate').value,
+    timeSlot: document.getElementById('addTimeSlot').value,
+    code: document.getElementById('addCode').value.trim(),
+    truckNum: document.getElementById('addTruckNum').value.trim(),
+    driver: document.getElementById('addDriver').value.trim(),
+    phone: document.getElementById('addPhone').value.trim(),
+    carrier: document.getElementById('addCarrier').value.trim(),
+    status: 'Scheduled',
+    notes: ''
+  };
+  trucks.push(t);
+  saveData();
+  closeModal('addTruckModal');
+  renderDaily();
+  renderSchedule();
+}
+
+// ===== BULK ADD =====
+function showBulkAdd() {
+  document.getElementById('bulkDate').value = formatDate(scheduleDate);
+  populateTimeSlots('bulkTimeSlot');
+  document.getElementById('bulkCount').value = '8';
+  document.getElementById('bulkAddModal').classList.add('show');
+}
+
+function bulkAdd() {
+  var buyer = document.getElementById('bulkBuyer').value;
+  var date = document.getElementById('bulkDate').value;
+  var slot = document.getElementById('bulkTimeSlot').value;
+  var count = parseInt(document.getElementById('bulkCount').value) || 0;
+
+  for (var i = 0; i < count; i++) {
+    trucks.push({
+      id: nextId(),
+      buyer: buyer,
+      date: date,
+      timeSlot: slot,
+      code: '',
+      truckNum: '',
+      driver: '',
+      phone: '',
+      carrier: '',
+      status: 'Scheduled',
+      notes: ''
+    });
+  }
+  saveData();
+  closeModal('bulkAddModal');
+  renderSchedule();
+}
+
+function populateTimeSlots(selectId) {
+  var sel = document.getElementById(selectId);
+  sel.innerHTML = '';
+  CONFIG.timeSlots.forEach(function(s) {
+    sel.innerHTML += '<option value="' + s + '">' + s + '</option>';
+  });
+}
+
+// ===== SCHEDULE TAB =====
+function renderSchedule() {
+  var strip = document.getElementById('calStrip');
+  var html = '';
+  var today = new Date();
+
+  for (var i = -2; i <= 12; i++) {
+    var d = new Date(today);
+    d.setDate(d.getDate() + i);
+    var ds = formatDate(d);
+    var isToday = ds === todayStr();
+    var isActive = ds === formatDate(scheduleDate);
+    var count = trucks.filter(function(t) { return t.date === ds; }).length;
+    var days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+    var cls = 'cal-day';
+    if (isActive) cls += ' active';
+    if (isToday) cls += ' today';
+
+    html += '<button class="' + cls + '" onclick="selectScheduleDate(\'' + ds + '\')">';
+    html += '<div class="cal-dow">' + days[d.getDay()] + '</div>';
+    html += '<div class="cal-date">' + d.getDate() + '</div>';
+    html += '<div class="cal-count">' + (count > 0 ? count + ' trucks' : '—') + '</div>';
+    html += '</button>';
+  }
+  strip.innerHTML = html;
+
+  // Slot view for selected date
+  var dateStr = formatDate(scheduleDate);
+  var dayTrucks = trucks.filter(function(t) { return t.date === dateStr; });
+
+  var view = '<h3 style="margin-bottom:12px">' + prettyDate(dateStr) + ' &mdash; ' + dayTrucks.length + ' trucks</h3>';
+
+  CONFIG.timeSlots.forEach(function(slot) {
+    var slotTrucks = dayTrucks.filter(function(t) { return t.timeSlot === slot; });
+    var count = slotTrucks.length;
+    var max = CONFIG.trucksPerSlot;
+    var countCls = count >= max ? 'full' : count > 0 ? 'partial' : 'empty';
+
+    var buyers = {};
+    slotTrucks.forEach(function(t) {
+      buyers[t.buyer] = (buyers[t.buyer] || 0) + 1;
+    });
+    var buyerStr = Object.keys(buyers).map(function(b) { return b + ' x' + buyers[b]; }).join(', ') || '— empty —';
+
+    view += '<div class="slot-row">';
+    view += '<div class="slot-time">' + slot + '</div>';
+    view += '<div class="slot-fill">' + buyerStr + '</div>';
+    view += '<div class="slot-count ' + countCls + '">' + count + '/' + max + '</div>';
+    view += '</div>';
+  });
+
+  document.getElementById('scheduleView').innerHTML = view;
+}
+
+function selectScheduleDate(ds) {
+  scheduleDate = new Date(ds + 'T12:00:00');
+  renderSchedule();
+}
+
+function generateSubmission() {
+  var dateStr = formatDate(scheduleDate);
+  var dayTrucks = trucks.filter(function(t) { return t.date === dateStr; });
+  dayTrucks.sort(function(a,b) { return a.timeSlot < b.timeSlot ? -1 : 1; });
+
+  var text = "APPOINTMENT REQUEST - " + prettyDate(dateStr) + "\n";
+  text += "Submitted by: Collin Erber\n";
+  text += "Total trucks: " + dayTrucks.length + "\n";
+  text += "=============================================\n\n";
+
+  dayTrucks.forEach(function(t) {
+    text += t.timeSlot + " - ";
+    text += "Truck: " + (t.truckNum || 'TBD') + ", ";
+    text += "Driver: " + (t.driver || 'TBD') + ", ";
+    text += "Phone: " + (t.phone || 'TBD') + ", ";
+    text += "Carrier: " + (t.carrier || 'TBD') + ", ";
+    text += "Buyer: " + t.buyer + "\n";
+  });
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() { alert("Submission copied to clipboard!"); });
+  } else {
+    var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.left = "-9999px";
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
+    alert("Submission copied to clipboard!");
+  }
+}
+
+// ===== OVERVIEW TAB =====
+function renderOverview() {
+  var loaded = trucks.filter(function(t) { return t.status === 'Loaded'; }).length;
+  var missed = trucks.filter(function(t) { return t.status === 'Missed'; }).length;
+  var scheduled = trucks.filter(function(t) { return t.status === 'Scheduled'; }).length;
+  var total = CONFIG.totalTrucks;
+  var pct = total > 0 ? (loaded / total * 100).toFixed(1) : 0;
+
+  var html = '';
+
+  // Progress
+  html += '<div class="card progress-section">';
+  html += '<div class="progress-big-num">' + pct + '%</div>';
+  html += '<div class="progress-label">' + loaded + ' of ' + total + ' trucks loaded</div>';
+  html += '<div class="progress-bar-lg"><div class="fill" style="width:' + pct + '%"></div></div>';
+  html += '<div class="text-muted">Remaining: ' + (total - loaded) + ' trucks</div>';
+  html += '</div>';
+
+  // Stats grid
+  html += '<div class="stat-grid">';
+  html += '<div class="card stat-card"><div class="stat-num" style="color:var(--green)">' + loaded + '</div><div class="stat-label">Loaded</div></div>';
+  html += '<div class="card stat-card"><div class="stat-num" style="color:var(--red)">' + missed + '</div><div class="stat-label">Missed</div></div>';
+  html += '<div class="card stat-card"><div class="stat-num" style="color:var(--blue)">' + scheduled + '</div><div class="stat-label">Scheduled</div></div>';
+  html += '<div class="card stat-card"><div class="stat-num">' + trucks.length + '</div><div class="stat-label">In System</div></div>';
+  html += '</div>';
+
+  // Buyer breakdown
+  html += '<div class="card"><h3 style="margin-bottom:12px">Buyer Breakdown</h3>';
+  Object.keys(CONFIG.buyers).forEach(function(buyer) {
+    var bTotal = CONFIG.buyers[buyer].total;
+    var bLoaded = trucks.filter(function(t) { return t.buyer === buyer && t.status === 'Loaded'; }).length;
+    var bPct = bTotal > 0 ? (bLoaded / bTotal * 100) : 0;
+
+    html += '<div class="buyer-bar">';
+    html += '<div class="buyer-name">' + buyer + '</div>';
+    html += '<div class="buyer-progress"><div class="buyer-fill" style="width:' + bPct + '%;background:' + CONFIG.buyers[buyer].color + '"></div></div>';
+    html += '<div class="buyer-count">' + bLoaded + ' / ' + bTotal + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Estimated completion
+  if (loaded > 0) {
+    var dates = {};
+    trucks.forEach(function(t) {
+      if (t.status === 'Loaded') {
+        dates[t.date] = (dates[t.date] || 0) + 1;
+      }
+    });
+    var dayCount = Object.keys(dates).length;
+    var avgPerDay = dayCount > 0 ? Math.round(loaded / dayCount) : 0;
+    var remaining = total - loaded;
+    var daysLeft = avgPerDay > 0 ? Math.ceil(remaining / avgPerDay) : '?';
+
+    html += '<div class="card text-center">';
+    html += '<div class="text-muted">Average</div>';
+    html += '<div style="font-size:24px;font-weight:800">' + avgPerDay + ' trucks/day</div>';
+    html += '<div class="text-muted mt-8">Est. ' + daysLeft + ' days remaining</div>';
+    html += '</div>';
+  }
+
+  // Daily history
+  var dateMap = {};
+  trucks.forEach(function(t) {
+    if (!dateMap[t.date]) dateMap[t.date] = { loaded: 0, missed: 0, total: 0 };
+    dateMap[t.date].total++;
+    if (t.status === 'Loaded') dateMap[t.date].loaded++;
+    if (t.status === 'Missed') dateMap[t.date].missed++;
+  });
+
+  var sortedDates = Object.keys(dateMap).sort().reverse();
+  if (sortedDates.length > 0) {
+    html += '<div class="card"><h3 style="margin-bottom:12px">Daily History</h3>';
+    html += '<div class="history-row" style="font-weight:700;border-bottom:2px solid var(--border)">';
+    html += '<div class="h-date">Date</div><div class="h-loaded">Done</div><div class="h-missed">Miss</div><div class="h-total">Total</div>';
+    html += '</div>';
+    sortedDates.forEach(function(d) {
+      var r = dateMap[d];
+      html += '<div class="history-row">';
+      html += '<div class="h-date">' + prettyDate(d) + '</div>';
+      html += '<div class="h-loaded">' + r.loaded + '</div>';
+      html += '<div class="h-missed">' + r.missed + '</div>';
+      html += '<div class="h-total">' + r.total + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Export
+  html += '<div class="export-bar mt-16">';
+  html += '<button class="btn-green" onclick="exportFullReport()" style="flex:1;padding:12px;border:none;border-radius:10px;font-size:14px;font-weight:600;color:#fff;cursor:pointer">Copy Full Report</button>';
+  html += '</div>';
+
+  document.getElementById('overviewContent').innerHTML = html;
+}
+
+// ===== EXPORT FUNCTIONS =====
+function buildDailyReport() {
+  var dateStr = formatDate(currentDate);
+  var dayTrucks = trucks.filter(function(t) { return t.date === dateStr; });
+  var loaded = dayTrucks.filter(function(t) { return t.status === 'Loaded'; }).length;
+  var missed = dayTrucks.filter(function(t) { return t.status === 'Missed'; }).length;
+  var missedCodes = dayTrucks.filter(function(t) { return t.status === 'Missed'; }).map(function(t) { return t.code || 'no-code'; });
+
+  var totalLoaded = trucks.filter(function(t) { return t.status === 'Loaded'; }).length;
+
+  var text = "DAILY REPORT - " + prettyDate(dateStr) + "\n";
+  text += "=============================================\n";
+  text += "Loaded: " + loaded + "/" + dayTrucks.length + " (" + (dayTrucks.length > 0 ? Math.round(loaded/dayTrucks.length*100) : 0) + "%)\n";
+  text += "Missed: " + missed + "\n";
+  if (missedCodes.length > 0) text += "Missed codes: " + missedCodes.join(", ") + "\n";
+  text += "\n";
+
+  Object.keys(CONFIG.buyers).forEach(function(buyer) {
+    var bDay = dayTrucks.filter(function(t) { return t.buyer === buyer; });
+    var bLoaded = bDay.filter(function(t) { return t.status === 'Loaded'; }).length;
+    text += buyer + ": " + bLoaded + "/" + bDay.length + " loaded\n";
+  });
+
+  text += "\nOverall progress: " + totalLoaded + "/" + CONFIG.totalTrucks + " (" + (CONFIG.totalTrucks > 0 ? Math.round(totalLoaded/CONFIG.totalTrucks*100) : 0) + "%)\n";
+  return text;
+}
+
+function exportDailyReport() {
+  var text = buildDailyReport();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() { alert("Report copied!"); });
+  } else {
+    var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.left = "-9999px";
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
+    alert("Report copied!");
+  }
+}
+
+function textDailyReport() {
+  var text = buildDailyReport();
+  window.location.href = "sms:&body=" + encodeURIComponent(text);
+}
+
+function exportFullReport() {
+  var loaded = trucks.filter(function(t) { return t.status === 'Loaded'; }).length;
+  var missed = trucks.filter(function(t) { return t.status === 'Missed'; }).length;
+
+  var text = "SUGAR OPERATIONS - FULL REPORT\n";
+  text += "=============================================\n";
+  text += "Progress: " + loaded + " / " + CONFIG.totalTrucks + " trucks (" + Math.round(loaded/CONFIG.totalTrucks*100) + "%)\n";
+  text += "Missed: " + missed + "\n";
+  text += "In system: " + trucks.length + "\n\n";
+
+  Object.keys(CONFIG.buyers).forEach(function(buyer) {
+    var bLoaded = trucks.filter(function(t) { return t.buyer === buyer && t.status === 'Loaded'; }).length;
+    text += buyer + ": " + bLoaded + " / " + CONFIG.buyers[buyer].total + " loaded\n";
+  });
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() { alert("Full report copied!"); });
+  }
+}
+
+// ===== MODAL HELPERS =====
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+// Close modals on overlay tap
+document.querySelectorAll('.modal-overlay').forEach(function(m) {
+  m.addEventListener('click', function(e) {
+    if (e.target === m) m.classList.remove('show');
+  });
+});
+
+// ===== SAMPLE DATA (for prototype testing) =====
+function loadSampleData() {
+  if (trucks.length > 0) return; // Don't overwrite existing data
+
+  var today = todayStr();
+  var tomorrow = formatDate(new Date(Date.now() + 86400000));
+  var sampleNames = ["John Smith","Mike Johnson","Steve Williams","Dave Brown","Tom Wilson","Carlos Garcia","James Lee","Robert Chen"];
+  var sampleTrucks = ["T-1158","T-2204","T-3350","T-4401","T-5501","T-6602","T-7703","T-8804"];
+
+  // Add 40 trucks for today (Rocky morning, Marco afternoon)
+  var id = 1;
+  ["07:00","08:00","09:00","10:00","11:00"].forEach(function(slot, si) {
+    for (var i = 0; i < 5; i++) {
+      var ni = (si * 5 + i) % 8;
+      trucks.push({
+        id: id++,
+        buyer: "Rocky",
+        date: today,
+        timeSlot: slot,
+        code: "WH-" + String(id).padStart(3,"0"),
+        truckNum: sampleTrucks[ni],
+        driver: sampleNames[ni],
+        phone: "555-" + String(1000 + id).padStart(4,"0"),
+        carrier: "ABC Transport",
+        status: si < 2 ? "Loaded" : "Scheduled",
+        notes: ""
+      });
+    }
+  });
+
+  ["13:00","14:00","15:00","16:00"].forEach(function(slot, si) {
+    for (var i = 0; i < 5; i++) {
+      var ni = (si * 5 + i) % 8;
+      trucks.push({
+        id: id++,
+        buyer: "Marco",
+        date: today,
+        timeSlot: slot,
+        code: "WH-" + String(id).padStart(3,"0"),
+        truckNum: sampleTrucks[ni],
+        driver: sampleNames[ni],
+        phone: "555-" + String(1000 + id).padStart(4,"0"),
+        carrier: "XYZ Logistics",
+        status: "Scheduled",
+        notes: ""
+      });
+    }
+  });
+
+  // Mark a couple as missed for realism
+  trucks[12].status = "Missed";
+  trucks[12].notes = "Driver no-show";
+  trucks[35].status = "Missed";
+
+  // Add 30 trucks for tomorrow
+  ["07:00","08:00","09:00"].forEach(function(slot) {
+    for (var i = 0; i < 5; i++) {
+      trucks.push({
+        id: id++, buyer: "Rocky", date: tomorrow, timeSlot: slot,
+        code: "", truckNum: "", driver: "", phone: "", carrier: "",
+        status: "Scheduled", notes: ""
+      });
+    }
+  });
+  ["13:00","14:00","15:00"].forEach(function(slot) {
+    for (var i = 0; i < 5; i++) {
+      trucks.push({
+        id: id++, buyer: "Marco", date: tomorrow, timeSlot: slot,
+        code: "", truckNum: "", driver: "", phone: "", carrier: "",
+        status: "Scheduled", notes: ""
+      });
+    }
+  });
+
+  saveData();
+}
+
+// ===== INIT =====
+loadData();
+loadSampleData();
+renderDaily();
+</script>
+</body>
+</html>
