@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Sugar Operations</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -475,9 +476,134 @@
       cursor: pointer;
       -webkit-appearance: none;
     }
+
+    /* ===== LOGIN SCREEN ===== */
+    .login-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--light);
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-overlay.hidden { display: none; }
+
+    .login-box {
+      background: var(--white);
+      border-radius: 16px;
+      padding: 32px 24px;
+      width: 90%;
+      max-width: 340px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      text-align: center;
+    }
+    .login-box h1 {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .login-box .login-subtitle {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+    .login-box .pin-input {
+      width: 100%;
+      font-size: 28px;
+      letter-spacing: 12px;
+      text-align: center;
+      padding: 14px;
+      font-weight: 700;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      -webkit-text-security: disc;
+      margin-bottom: 8px;
+      -webkit-appearance: none;
+    }
+    .login-box .pin-input:focus {
+      outline: none;
+      border-color: var(--blue);
+    }
+    .login-box .login-error {
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 600;
+      min-height: 20px;
+      margin-bottom: 12px;
+    }
+    .login-box .login-btn {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      -webkit-appearance: none;
+    }
+    .login-box .login-btn:active { opacity: 0.85; }
+    .login-box .login-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ===== USER HEADER ===== */
+    .user-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .user-header .user-name {
+      font-weight: 700;
+      color: var(--text);
+    }
+    .user-header .logout-btn {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--red);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 8px;
+      -webkit-appearance: none;
+    }
   </style>
 </head>
 <body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h1>Sugar Operations</h1>
+    <div class="login-subtitle">Enter your access code</div>
+    <input
+      type="tel"
+      id="pinInput"
+      class="pin-input"
+      maxlength="6"
+      inputmode="numeric"
+      pattern="[0-9]*"
+      placeholder="----"
+      autocomplete="off"
+    >
+    <div class="login-error" id="loginError"></div>
+    <button class="login-btn" id="loginBtn" onclick="attemptLogin()">Sign In</button>
+  </div>
+</div>
+
+<!-- USER HEADER -->
+<div class="user-header" id="userHeader" style="display:none">
+  <span class="user-name" id="userName"></span>
+  <button class="logout-btn" onclick="logout()">Log Out</button>
+</div>
 
 <!-- TAB BAR -->
 <div class="tab-bar">
@@ -593,7 +719,118 @@
 </div>
 
 <script>
-// ===== CONFIG (PLACEHOLDER - will be replaced with real warehouse data) =====
+// ===== SUPABASE CLIENT =====
+var SUPABASE_URL = 'https://feufuaipchbnsznjrxoi.supabase.co';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZldWZ1YWlwY2hibnN6bmpyeG9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5NDIxODcsImV4cCI6MjA4ODUxODE4N30.CI2zASMHegT566YIvwDqhticyV9qCzVP0NYCzSWD7kI';
+var sb = null;
+var useSupabase = false;
+try {
+  if (window.supabase && window.supabase.createClient) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    useSupabase = true;
+  }
+} catch(e) {
+  console.warn('Supabase client failed to init, using localStorage fallback:', e);
+}
+
+// ===== AUTH =====
+var SESSION_KEY = 'sugar_ops_session';
+var SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
+
+function getSession() {
+  try {
+    var raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    var session = JSON.parse(raw);
+    if (Date.now() > session.expires) {
+      sessionStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return session;
+  } catch(e) { return null; }
+}
+
+function setSession(name, role, buyerName) {
+  var session = {
+    name: name,
+    role: role,
+    buyerName: buyerName || null,
+    expires: Date.now() + SESSION_DURATION_MS
+  };
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
+function clearSession() {
+  sessionStorage.removeItem(SESSION_KEY);
+}
+
+async function attemptLogin() {
+  var pin = document.getElementById('pinInput').value.trim();
+  var errorEl = document.getElementById('loginError');
+  var btn = document.getElementById('loginBtn');
+
+  if (!pin || pin.length < 4) {
+    errorEl.textContent = 'Enter your access code';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+  errorEl.textContent = '';
+
+  try {
+    var result = await sb.rpc('validate_pin', { pin_input: pin });
+    if (result.error) throw result.error;
+
+    var data = result.data;
+    if (data && data.success) {
+      setSession(data.name, data.role, data.buyer_name);
+      await showDashboard(data.name, data.role);
+    } else {
+      errorEl.textContent = (data && data.error) || 'Invalid access code';
+      document.getElementById('pinInput').value = '';
+      document.getElementById('pinInput').focus();
+    }
+  } catch(e) {
+    console.error('Login error:', e);
+    errorEl.textContent = 'Connection error. Try again.';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Sign In';
+}
+
+function logout() {
+  clearSession();
+  showLogin();
+}
+
+function showLogin() {
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('userHeader').style.display = 'none';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('loginError').textContent = '';
+  setTimeout(function() { document.getElementById('pinInput').focus(); }, 100);
+}
+
+async function showDashboard(name, role) {
+  document.getElementById('loginOverlay').classList.add('hidden');
+  document.getElementById('userHeader').style.display = 'flex';
+  document.getElementById('userName').textContent = 'Hi, ' + name;
+
+  if (trucks.length === 0) {
+    await loadData();
+    await loadSampleData();
+    renderDaily();
+  }
+}
+
+document.getElementById('pinInput').addEventListener('keyup', function(e) {
+  if (e.key === 'Enter') attemptLogin();
+});
+
+// ===== CONFIG =====
 var CONFIG = {
   totalTrucks: 500,
   trucksPerSlot: 8,
@@ -609,6 +846,7 @@ var trucks = [];
 var currentDate = new Date();
 var selectedTruckId = null;
 var scheduleDate = new Date();
+var isLoading = false;
 
 function todayStr() { return formatDate(new Date()); }
 function formatDate(d) {
@@ -621,21 +859,199 @@ function prettyDate(str) {
   return days[d.getDay()] + ", " + months[d.getMonth()] + " " + d.getDate();
 }
 
-function loadData() {
+// ===== SUPABASE DATA FUNCTIONS =====
+// Map DB row (snake_case) to app object (camelCase)
+function dbToApp(row) {
+  return {
+    id: row.id,
+    buyer: row.buyer,
+    date: row.date,
+    timeSlot: row.time_slot,
+    code: row.code || '',
+    truckNum: row.truck_num || '',
+    driver: row.driver || '',
+    phone: row.phone || '',
+    carrier: row.carrier || '',
+    status: row.status,
+    notes: row.notes || ''
+  };
+}
+
+// Map app object to DB row
+function appToDb(t) {
+  return {
+    buyer: t.buyer,
+    date: t.date,
+    time_slot: t.timeSlot,
+    code: t.code,
+    truck_num: t.truckNum,
+    driver: t.driver,
+    phone: t.phone,
+    carrier: t.carrier,
+    status: t.status,
+    notes: t.notes
+  };
+}
+
+function saveToLocalStorage() {
+  localStorage.setItem("sugar_ops_trucks", JSON.stringify(trucks));
+}
+
+function loadFromLocalStorage() {
   try {
     var s = localStorage.getItem("sugar_ops_trucks");
     if (s) trucks = JSON.parse(s);
   } catch(e) {}
 }
 
-function saveData() {
-  localStorage.setItem("sugar_ops_trucks", JSON.stringify(trucks));
-}
-
-function nextId() {
+function nextLocalId() {
   var max = 0;
   trucks.forEach(function(t) { if (t.id > max) max = t.id; });
   return max + 1;
+}
+
+async function loadData() {
+  isLoading = true;
+  if (useSupabase) {
+    try {
+      var result = await sb.from('trucks').select('*')
+        .order('date', { ascending: true })
+        .order('time_slot', { ascending: true });
+      if (result.error) throw result.error;
+      trucks = (result.data || []).map(dbToApp);
+    } catch(e) {
+      console.error('Supabase load failed, using localStorage:', e);
+      loadFromLocalStorage();
+    }
+  } else {
+    loadFromLocalStorage();
+  }
+  isLoading = false;
+}
+
+async function insertTruck(truckData) {
+  if (useSupabase) {
+    try {
+      var dbRow = appToDb(truckData);
+      var result = await sb.from('trucks').insert([dbRow]).select();
+      if (result.error) throw result.error;
+      return result.data && result.data[0] ? dbToApp(result.data[0]) : null;
+    } catch(e) {
+      console.error('Supabase insert failed:', e);
+    }
+  }
+  // localStorage fallback
+  truckData.id = nextLocalId();
+  trucks.push(truckData);
+  saveToLocalStorage();
+  return truckData;
+}
+
+async function insertTrucksBulk(truckDataArray) {
+  if (useSupabase) {
+    try {
+      var dbRows = truckDataArray.map(appToDb);
+      var result = await sb.from('trucks').insert(dbRows).select();
+      if (result.error) throw result.error;
+      return (result.data || []).map(dbToApp);
+    } catch(e) {
+      console.error('Supabase bulk insert failed:', e);
+    }
+  }
+  // localStorage fallback
+  var inserted = [];
+  truckDataArray.forEach(function(t) {
+    t.id = nextLocalId();
+    trucks.push(t);
+    inserted.push(t);
+  });
+  saveToLocalStorage();
+  return inserted;
+}
+
+async function updateTruckField(id, fields) {
+  if (useSupabase) {
+    try {
+      var dbFields = {};
+      if ('status' in fields) dbFields.status = fields.status;
+      if ('notes' in fields) dbFields.notes = fields.notes;
+      var result = await sb.from('trucks').update(dbFields).eq('id', id);
+      if (result.error) throw result.error;
+      return;
+    } catch(e) {
+      console.error('Supabase update failed:', e);
+    }
+  }
+  saveToLocalStorage();
+}
+
+// ===== SAMPLE DATA =====
+async function loadSampleData() {
+  if (trucks.length > 0) return;
+
+  var today = todayStr();
+  var tomorrow = formatDate(new Date(Date.now() + 86400000));
+  var names = ["John Smith","Mike Johnson","Steve Williams","Dave Brown","Tom Wilson","Carlos Garcia","James Lee","Robert Chen"];
+  var nums = ["T-1158","T-2204","T-3350","T-4401","T-5501","T-6602","T-7703","T-8804"];
+  var samples = [];
+
+  ["07:00","08:00","09:00","10:00","11:00"].forEach(function(slot, si) {
+    for (var i = 0; i < 5; i++) {
+      var ni = (si * 5 + i) % 8;
+      var id = samples.length + 1;
+      samples.push({
+        buyer: "Rocky", date: today, timeSlot: slot,
+        code: "WH-" + String(id).padStart(3,"0"),
+        truckNum: nums[ni], driver: names[ni],
+        phone: "555-" + String(1000 + id).padStart(4,"0"),
+        carrier: "ABC Transport",
+        status: si < 2 ? "Loaded" : "Scheduled", notes: ""
+      });
+    }
+  });
+
+  ["13:00","14:00","15:00","16:00"].forEach(function(slot, si) {
+    for (var i = 0; i < 5; i++) {
+      var ni = (si * 5 + i) % 8;
+      var id = samples.length + 1;
+      samples.push({
+        buyer: "Marco", date: today, timeSlot: slot,
+        code: "WH-" + String(id).padStart(3,"0"),
+        truckNum: nums[ni], driver: names[ni],
+        phone: "555-" + String(1000 + id).padStart(4,"0"),
+        carrier: "XYZ Logistics",
+        status: "Scheduled", notes: ""
+      });
+    }
+  });
+
+  // Mark a couple as missed
+  samples[12].status = "Missed";
+  samples[12].notes = "Driver no-show";
+  samples[35].status = "Missed";
+
+  // Tomorrow trucks
+  ["07:00","08:00","09:00"].forEach(function(slot) {
+    for (var i = 0; i < 5; i++) {
+      samples.push({
+        buyer: "Rocky", date: tomorrow, timeSlot: slot,
+        code: "", truckNum: "", driver: "", phone: "", carrier: "",
+        status: "Scheduled", notes: ""
+      });
+    }
+  });
+  ["13:00","14:00","15:00"].forEach(function(slot) {
+    for (var i = 0; i < 5; i++) {
+      samples.push({
+        buyer: "Marco", date: tomorrow, timeSlot: slot,
+        code: "", truckNum: "", driver: "", phone: "", carrier: "",
+        status: "Scheduled", notes: ""
+      });
+    }
+  });
+
+  var inserted = await insertTrucksBulk(samples);
+  trucks = inserted;
 }
 
 // ===== TAB SWITCHING =====
@@ -735,7 +1151,7 @@ function setStatus(status) {
   var t = trucks.find(function(x) { return x.id === selectedTruckId; });
   if (t) {
     t.status = status;
-    saveData();
+    updateTruckField(t.id, { status: status });
   }
   closeModal('truckDetailModal');
   renderDaily();
@@ -745,7 +1161,7 @@ function saveNotes() {
   var t = trucks.find(function(x) { return x.id === selectedTruckId; });
   if (t) {
     t.notes = document.getElementById('detailNotes').value;
-    saveData();
+    updateTruckField(t.id, { notes: t.notes });
   }
   closeModal('truckDetailModal');
   renderDaily();
@@ -763,9 +1179,8 @@ function showAddTruck() {
   document.getElementById('addTruckModal').classList.add('show');
 }
 
-function addTruck() {
+async function addTruck() {
   var t = {
-    id: nextId(),
     buyer: document.getElementById('addBuyer').value,
     date: document.getElementById('addDate').value,
     timeSlot: document.getElementById('addTimeSlot').value,
@@ -777,8 +1192,24 @@ function addTruck() {
     status: 'Scheduled',
     notes: ''
   };
-  trucks.push(t);
-  saveData();
+
+  if (useSupabase) {
+    try {
+      var dbRow = appToDb(t);
+      var result = await sb.from('trucks').insert([dbRow]).select();
+      if (result.error) throw result.error;
+      if (result.data && result.data[0]) trucks.push(dbToApp(result.data[0]));
+    } catch(e) {
+      console.error('Insert failed:', e);
+      t.id = nextLocalId();
+      trucks.push(t);
+      saveToLocalStorage();
+    }
+  } else {
+    t.id = nextLocalId();
+    trucks.push(t);
+    saveToLocalStorage();
+  }
   closeModal('addTruckModal');
   renderDaily();
   renderSchedule();
@@ -792,15 +1223,15 @@ function showBulkAdd() {
   document.getElementById('bulkAddModal').classList.add('show');
 }
 
-function bulkAdd() {
+async function bulkAdd() {
   var buyer = document.getElementById('bulkBuyer').value;
   var date = document.getElementById('bulkDate').value;
   var slot = document.getElementById('bulkTimeSlot').value;
   var count = parseInt(document.getElementById('bulkCount').value) || 0;
 
+  var newTrucks = [];
   for (var i = 0; i < count; i++) {
-    trucks.push({
-      id: nextId(),
+    newTrucks.push({
       buyer: buyer,
       date: date,
       timeSlot: slot,
@@ -813,8 +1244,10 @@ function bulkAdd() {
       notes: ''
     });
   }
-  saveData();
+
+  await insertTrucksBulk(newTrucks);
   closeModal('bulkAddModal');
+  await loadData();
   renderSchedule();
 }
 
@@ -1085,87 +1518,15 @@ document.querySelectorAll('.modal-overlay').forEach(function(m) {
   });
 });
 
-// ===== SAMPLE DATA (for prototype testing) =====
-function loadSampleData() {
-  if (trucks.length > 0) return; // Don't overwrite existing data
-
-  var today = todayStr();
-  var tomorrow = formatDate(new Date(Date.now() + 86400000));
-  var sampleNames = ["John Smith","Mike Johnson","Steve Williams","Dave Brown","Tom Wilson","Carlos Garcia","James Lee","Robert Chen"];
-  var sampleTrucks = ["T-1158","T-2204","T-3350","T-4401","T-5501","T-6602","T-7703","T-8804"];
-
-  // Add 40 trucks for today (Rocky morning, Marco afternoon)
-  var id = 1;
-  ["07:00","08:00","09:00","10:00","11:00"].forEach(function(slot, si) {
-    for (var i = 0; i < 5; i++) {
-      var ni = (si * 5 + i) % 8;
-      trucks.push({
-        id: id++,
-        buyer: "Rocky",
-        date: today,
-        timeSlot: slot,
-        code: "WH-" + String(id).padStart(3,"0"),
-        truckNum: sampleTrucks[ni],
-        driver: sampleNames[ni],
-        phone: "555-" + String(1000 + id).padStart(4,"0"),
-        carrier: "ABC Transport",
-        status: si < 2 ? "Loaded" : "Scheduled",
-        notes: ""
-      });
-    }
-  });
-
-  ["13:00","14:00","15:00","16:00"].forEach(function(slot, si) {
-    for (var i = 0; i < 5; i++) {
-      var ni = (si * 5 + i) % 8;
-      trucks.push({
-        id: id++,
-        buyer: "Marco",
-        date: today,
-        timeSlot: slot,
-        code: "WH-" + String(id).padStart(3,"0"),
-        truckNum: sampleTrucks[ni],
-        driver: sampleNames[ni],
-        phone: "555-" + String(1000 + id).padStart(4,"0"),
-        carrier: "XYZ Logistics",
-        status: "Scheduled",
-        notes: ""
-      });
-    }
-  });
-
-  // Mark a couple as missed for realism
-  trucks[12].status = "Missed";
-  trucks[12].notes = "Driver no-show";
-  trucks[35].status = "Missed";
-
-  // Add 30 trucks for tomorrow
-  ["07:00","08:00","09:00"].forEach(function(slot) {
-    for (var i = 0; i < 5; i++) {
-      trucks.push({
-        id: id++, buyer: "Rocky", date: tomorrow, timeSlot: slot,
-        code: "", truckNum: "", driver: "", phone: "", carrier: "",
-        status: "Scheduled", notes: ""
-      });
-    }
-  });
-  ["13:00","14:00","15:00"].forEach(function(slot) {
-    for (var i = 0; i < 5; i++) {
-      trucks.push({
-        id: id++, buyer: "Marco", date: tomorrow, timeSlot: slot,
-        code: "", truckNum: "", driver: "", phone: "", carrier: "",
-        status: "Scheduled", notes: ""
-      });
-    }
-  });
-
-  saveData();
-}
-
 // ===== INIT =====
-loadData();
-loadSampleData();
-renderDaily();
+(async function init() {
+  var session = getSession();
+  if (session) {
+    await showDashboard(session.name, session.role);
+  } else {
+    showLogin();
+  }
+})();
 </script>
 </body>
 </html>
