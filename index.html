@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Sugar Operations</title>
+  <title>Makes Sense Supply</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -575,6 +575,33 @@
       padding: 4px 8px;
       -webkit-appearance: none;
     }
+
+    /* ===== BRAND HEADER ===== */
+    .brand-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 16px;
+      background: #1e293b;
+    }
+    .brand-header img {
+      height: 30px;
+      width: auto;
+    }
+    .brand-header .brand-name {
+      font-size: 17px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: 0.5px;
+    }
+
+    /* ===== LOGIN LOGO ===== */
+    .login-logo {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 12px;
+    }
   </style>
 </head>
 <body>
@@ -582,7 +609,8 @@
 <!-- LOGIN SCREEN -->
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
-    <h1>Sugar Operations</h1>
+    <img src="images/Makes sense supply yellow.png" alt="Makes Sense Supply" class="login-logo">
+    <h1>Makes Sense Supply</h1>
     <div class="login-subtitle">Enter your access code</div>
     <input
       type="tel"
@@ -597,6 +625,12 @@
     <div class="login-error" id="loginError"></div>
     <button class="login-btn" id="loginBtn" onclick="attemptLogin()">Sign In</button>
   </div>
+</div>
+
+<!-- BRAND HEADER -->
+<div class="brand-header" id="brandHeader" style="display:none">
+  <img src="images/Makes sense supply yellow.png" alt="Logo">
+  <span class="brand-name">Makes Sense Supply</span>
 </div>
 
 <!-- USER HEADER -->
@@ -808,6 +842,7 @@ function logout() {
 
 function showLogin() {
   document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('brandHeader').style.display = 'none';
   document.getElementById('userHeader').style.display = 'none';
   document.getElementById('pinInput').value = '';
   document.getElementById('loginError').textContent = '';
@@ -816,6 +851,7 @@ function showLogin() {
 
 async function showDashboard(name, role) {
   document.getElementById('loginOverlay').classList.add('hidden');
+  document.getElementById('brandHeader').style.display = 'flex';
   document.getElementById('userHeader').style.display = 'flex';
   document.getElementById('userName').textContent = 'Hi, ' + name;
 
