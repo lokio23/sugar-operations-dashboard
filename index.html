@@ -663,6 +663,26 @@
       color: var(--red);
     }
 
+    /* ===== PULL TO REFRESH ===== */
+    .pull-refresh {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 200;
+      text-align: center;
+      padding: 10px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      transform: translateY(-100%);
+      transition: transform 0.2s ease;
+    }
+    .pull-refresh.visible {
+      transform: translateY(0);
+    }
+
     /* ===== LOGIN LOGO ===== */
     .login-logo {
       width: 64px;
@@ -672,6 +692,8 @@
   </style>
 </head>
 <body>
+
+<div class="pull-refresh" id="pullRefresh">Refreshing...</div>
 
 <!-- LOGIN SCREEN -->
 <div class="login-overlay" id="loginOverlay">
@@ -1183,6 +1205,42 @@ function switchTab(name) {
   document.getElementById('fabBtn').style.display = (name === 'daily' || name === 'schedule') ? 'block' : 'none';
 }
 
+// ===== PULL TO REFRESH =====
+var pullStartY = 0;
+var isPulling = false;
+var isRefreshing = false;
+
+document.addEventListener('touchstart', function(e) {
+  if (window.scrollY === 0) {
+    pullStartY = e.touches[0].clientY;
+    isPulling = true;
+  }
+}, { passive: true });
+
+document.addEventListener('touchmove', function(e) {
+  if (!isPulling || isRefreshing) return;
+  var pullDistance = e.touches[0].clientY - pullStartY;
+  if (pullDistance > 60 && window.scrollY === 0) {
+    document.getElementById('pullRefresh').classList.add('visible');
+  }
+}, { passive: true });
+
+document.addEventListener('touchend', function() {
+  if (!isPulling || isRefreshing) { isPulling = false; return; }
+  var indicator = document.getElementById('pullRefresh');
+  if (indicator.classList.contains('visible')) {
+    isRefreshing = true;
+    loadData().then(function() {
+      if (document.getElementById('tab-daily').classList.contains('active')) renderDaily();
+      else if (document.getElementById('tab-schedule').classList.contains('active')) renderSchedule();
+      else renderOverview();
+      indicator.classList.remove('visible');
+      isRefreshing = false;
+    });
+  }
+  isPulling = false;
+});
+
 // ===== DAILY BOARD =====
 function changeDay(offset) {
   currentDate.setDate(currentDate.getDate() + offset);
@@ -1501,12 +1559,23 @@ function renderOverview() {
     html += '</div>';
   }
 
-  // Progress
-  html += '<div class="card progress-section">';
-  html += '<div class="progress-big-num">' + pct + '%</div>';
-  html += '<div class="progress-label">' + loaded + ' of ' + total + ' trucks loaded</div>';
-  html += '<div class="progress-bar-lg"><div class="fill" style="width:' + pct + '%"></div></div>';
-  html += '<div class="text-muted">Remaining: ' + (total - loaded) + ' trucks</div>';
+  // Per-client progress
+  Object.keys(CONFIG.buyers).forEach(function(buyer) {
+    var bTotal = CONFIG.buyers[buyer].total;
+    var bLoaded = trucks.filter(function(t) { return t.buyer === buyer && t.status === 'Loaded'; }).length;
+    var bMissed = trucks.filter(function(t) { return t.buyer === buyer && t.status === 'Missed'; }).length;
+    var bPct = bTotal > 0 ? (bLoaded / bTotal * 100).toFixed(1) : 0;
+    var bColor = CONFIG.buyers[buyer].color;
+    html += '<div class="card progress-section">';
+    html += '<div class="progress-big-num" style="color:' + bColor + '">' + bPct + '%</div>';
+    html += '<div class="progress-label">' + buyer + ': ' + bLoaded + ' of ' + bTotal + ' loaded' + (bMissed > 0 ? ' <span style="color:var(--red);font-size:13px">(' + bMissed + ' missed)</span>' : '') + '</div>';
+    html += '<div class="progress-bar-lg"><div class="fill" style="width:' + bPct + '%;background:' + bColor + '"></div></div>';
+    html += '<div class="text-muted">Remaining: ' + (bTotal - bLoaded) + ' trucks</div>';
+    html += '</div>';
+  });
+  // Overall total
+  html += '<div class="card" style="text-align:center;padding:10px 14px">';
+  html += '<span style="font-weight:700">' + loaded + ' of ' + total + ' total</span> <span class="text-muted">(' + pct + '%)</span>';
   html += '</div>';
 
   // Stats grid
@@ -1527,21 +1596,6 @@ function renderOverview() {
   }
   html += '</div>';
 
-  // Buyer breakdown
-  html += '<div class="card"><h3 style="margin-bottom:12px">Buyer Breakdown</h3>';
-  Object.keys(CONFIG.buyers).forEach(function(buyer) {
-    var bTotal = CONFIG.buyers[buyer].total;
-    var bLoaded = trucks.filter(function(t) { return t.buyer === buyer && t.status === 'Loaded'; }).length;
-    var bMissed = trucks.filter(function(t) { return t.buyer === buyer && t.status === 'Missed'; }).length;
-    var bPct = bTotal > 0 ? (bLoaded / bTotal * 100) : 0;
-
-    html += '<div class="buyer-bar">';
-    html += '<div class="buyer-name">' + buyer + '</div>';
-    html += '<div class="buyer-progress"><div class="buyer-fill" style="width:' + bPct + '%;background:' + CONFIG.buyers[buyer].color + '"></div></div>';
-    html += '<div class="buyer-count">' + bLoaded + ' / ' + bTotal + (bMissed > 0 ? ' <span style="color:var(--red);font-size:12px">(' + bMissed + ' miss)</span>' : '') + '</div>';
-    html += '</div>';
-  });
-  html += '</div>';
 
   // Estimated completion
   if (loaded > 0) {
