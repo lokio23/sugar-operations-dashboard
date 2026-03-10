@@ -808,9 +808,9 @@
     <div class="modal-handle"></div>
     <h3 id="detailTitle">Truck Details</h3>
     <div id="detailContent"></div>
-    <button class="btn btn-green btn-full" onclick="setStatus('Loaded')">Mark Loaded</button>
-    <button class="btn btn-red btn-full" onclick="setStatus('Missed')">Mark Missed</button>
-    <button class="btn btn-gray btn-full" onclick="setStatus('Scheduled')">Reset to Scheduled</button>
+    <button class="btn btn-green btn-full" onclick="setStatus(STATUS.LOADED)">Mark Loaded</button>
+    <button class="btn btn-red btn-full" onclick="setStatus(STATUS.MISSED)">Mark Missed</button>
+    <button class="btn btn-gray btn-full" onclick="setStatus(STATUS.SCHEDULED)">Reset to Scheduled</button>
     <div class="mt-16">
       <label>Notes</label>
       <textarea id="detailNotes" rows="2" placeholder="Add notes..."></textarea>
@@ -967,6 +967,9 @@ var CONFIG = {
   }
 };
 
+var STATUS = { LOADED: 'Loaded', MISSED: 'Missed', SCHEDULED: 'Scheduled' };
+var isSaving = false;
+
 function escAttr(val) {
   if (!val) return '';
   return String(val).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -979,8 +982,8 @@ function copyToClipboard(text, msg) {
     var ta = document.createElement('textarea');
     ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
     document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); document.body.removeChild(ta);
-    alert(msg);
+    var ok = document.execCommand('copy'); document.body.removeChild(ta);
+    alert(ok ? msg : 'Copy failed. Please copy manually.');
   }
 }
 
@@ -998,6 +1001,26 @@ function getSlotCount(date, timeSlot) {
   return trucks.filter(function(t) {
     return t.date === date && t.timeSlot === timeSlot;
   }).length;
+}
+
+function getTrucksByDate(dateStr) {
+  return trucks.filter(function(t) { return t.date === dateStr; });
+}
+
+function countByStatus(truckList) {
+  var loaded = 0, missed = 0, scheduled = 0;
+  truckList.forEach(function(t) {
+    if (t.status === STATUS.LOADED) loaded++;
+    else if (t.status === STATUS.MISSED) missed++;
+    else if (t.status === STATUS.SCHEDULED) scheduled++;
+  });
+  return { loaded: loaded, missed: missed, scheduled: scheduled, total: truckList.length };
+}
+
+function renderActiveTab() {
+  if (document.getElementById('tab-daily').classList.contains('active')) renderDaily();
+  else if (document.getElementById('tab-schedule').classList.contains('active')) renderSchedule();
+  else renderOverview();
 }
 
 // Load saved fine amount
@@ -1147,7 +1170,9 @@ async function insertTrucksBulk(truckDataArray) {
       var dbRows = truckDataArray.map(appToDb);
       var result = await sb.from('trucks').insert(dbRows).select();
       if (result.error) throw result.error;
-      return (result.data || []).map(dbToApp);
+      var inserted = (result.data || []).map(dbToApp);
+      inserted.forEach(function(t) { trucks.push(t); });
+      return inserted;
     } catch(e) {
       console.error('Supabase bulk insert failed:', e);
     }
@@ -1291,9 +1316,10 @@ document.addEventListener('touchend', function() {
   if (indicator.classList.contains('visible')) {
     isRefreshing = true;
     loadData().then(function() {
-      if (document.getElementById('tab-daily').classList.contains('active')) renderDaily();
-      else if (document.getElementById('tab-schedule').classList.contains('active')) renderSchedule();
-      else renderOverview();
+      renderActiveTab();
+    }).catch(function(e) {
+      console.error('Refresh failed:', e);
+    }).finally(function() {
       indicator.classList.remove('visible');
       isRefreshing = false;
     });
@@ -1316,8 +1342,8 @@ function renderDaily() {
 
   var loaded = 0, missed = 0;
   dayTrucks.forEach(function(t) {
-    if (t.status === 'Loaded') loaded++;
-    else if (t.status === 'Missed') missed++;
+    if (t.status === STATUS.LOADED) loaded++;
+    else if (t.status === STATUS.MISSED) missed++;
   });
   var remaining = dayTrucks.length - loaded - missed;
 
@@ -1340,9 +1366,9 @@ function renderDaily() {
       lastSlot = t.timeSlot;
     }
 
-    var statusClass = t.status === 'Loaded' ? 'status-loaded' : t.status === 'Missed' ? 'status-missed' : '';
+    var statusClass = t.status === STATUS.LOADED ? 'status-loaded' : t.status === STATUS.MISSED ? 'status-missed' : '';
     var buyerClass = t.buyer === 'Rocky' ? 'badge-buyer-rocky' : 'badge-buyer-marco';
-    var statusBadge = t.status === 'Loaded' ? 'badge-loaded' : t.status === 'Missed' ? 'badge-missed' : 'badge-scheduled';
+    var statusBadge = t.status === STATUS.LOADED ? 'badge-loaded' : t.status === STATUS.MISSED ? 'badge-missed' : 'badge-scheduled';
 
     html += '<div class="truck-card ' + statusClass + '" onclick="openTruckDetail(' + t.id + ')">';
     html += '<div class="truck-info">';
@@ -1407,19 +1433,25 @@ function applyEditsToTruck(t, edits) {
   t.notes = edits.notes;
 }
 
-function saveAndClose(overrideFields) {
-  var t = getTruckById(selectedTruckId);
-  if (t) {
-    var edits = getDetailEdits();
-    if (overrideFields) {
-      Object.keys(overrideFields).forEach(function(k) { edits[k] = overrideFields[k]; });
+async function saveAndClose(overrideFields) {
+  if (isSaving) return;
+  isSaving = true;
+  try {
+    var t = getTruckById(selectedTruckId);
+    if (t) {
+      var edits = getDetailEdits();
+      if (overrideFields) {
+        Object.keys(overrideFields).forEach(function(k) { edits[k] = overrideFields[k]; });
+      }
+      applyEditsToTruck(t, edits);
+      if (overrideFields && overrideFields.status) t.status = overrideFields.status;
+      await updateTruckField(t.id, edits);
     }
-    applyEditsToTruck(t, edits);
-    if (overrideFields && overrideFields.status) t.status = overrideFields.status;
-    updateTruckField(t.id, edits);
+    closeModal('truckDetailModal');
+    renderActiveTab();
+  } finally {
+    isSaving = false;
   }
-  closeModal('truckDetailModal');
-  renderDaily();
 }
 
 function setStatus(status) { saveAndClose({ status: status }); }
@@ -1438,29 +1470,34 @@ function showAddTruck() {
 }
 
 async function addTruck() {
-  var t = {
-    buyer: document.getElementById('addBuyer').value,
-    date: document.getElementById('addDate').value,
-    timeSlot: document.getElementById('addTimeSlot').value,
-    code: document.getElementById('addCode').value.trim(),
-    truckNum: document.getElementById('addTruckNum').value.trim(),
-    driver: document.getElementById('addDriver').value.trim(),
-    phone: document.getElementById('addPhone').value.trim(),
-    carrier: document.getElementById('addCarrier').value.trim(),
-    status: 'Scheduled',
-    notes: ''
-  };
+  if (isSaving) return;
+  isSaving = true;
+  try {
+    var t = {
+      buyer: document.getElementById('addBuyer').value,
+      date: document.getElementById('addDate').value,
+      timeSlot: document.getElementById('addTimeSlot').value,
+      code: document.getElementById('addCode').value.trim(),
+      truckNum: document.getElementById('addTruckNum').value.trim(),
+      driver: document.getElementById('addDriver').value.trim(),
+      phone: document.getElementById('addPhone').value.trim(),
+      carrier: document.getElementById('addCarrier').value.trim(),
+      status: STATUS.SCHEDULED,
+      notes: ''
+    };
 
-  var slotCount = getSlotCount(t.date, t.timeSlot);
-  if (slotCount >= CONFIG.trucksPerSlot) {
-    alert('Time slot ' + t.timeSlot + ' is full (' + CONFIG.trucksPerSlot + ' bays). Choose a different slot.');
-    return;
+    var slotCount = getSlotCount(t.date, t.timeSlot);
+    if (slotCount >= CONFIG.trucksPerSlot) {
+      alert('Time slot ' + t.timeSlot + ' is full (' + CONFIG.trucksPerSlot + ' bays). Choose a different slot.');
+      return;
+    }
+
+    await insertTruck(t);
+    closeModal('addTruckModal');
+    renderActiveTab();
+  } finally {
+    isSaving = false;
   }
-
-  await insertTruck(t);
-  closeModal('addTruckModal');
-  renderDaily();
-  renderSchedule();
 }
 
 // ===== BULK ADD =====
@@ -1472,42 +1509,47 @@ function showBulkAdd() {
 }
 
 async function bulkAdd() {
-  var buyer = document.getElementById('bulkBuyer').value;
-  var date = document.getElementById('bulkDate').value;
-  var slot = document.getElementById('bulkTimeSlot').value;
-  var count = parseInt(document.getElementById('bulkCount').value) || 0;
-  if (count < 1 || count > 100) {
-    alert('Enter a number between 1 and 100');
-    return;
-  }
+  if (isSaving) return;
+  isSaving = true;
+  try {
+    var buyer = document.getElementById('bulkBuyer').value;
+    var date = document.getElementById('bulkDate').value;
+    var slot = document.getElementById('bulkTimeSlot').value;
+    var count = parseInt(document.getElementById('bulkCount').value) || 0;
+    if (count < 1 || count > 100) {
+      alert('Enter a number between 1 and 100');
+      return;
+    }
 
-  var currentCount = getSlotCount(date, slot);
-  var remaining = CONFIG.trucksPerSlot - currentCount;
-  if (count > remaining) {
-    alert('Slot ' + slot + ' only has ' + remaining + ' of ' + CONFIG.trucksPerSlot + ' bays available. Reduce count or pick another slot.');
-    return;
-  }
+    var currentCount = getSlotCount(date, slot);
+    var remaining = CONFIG.trucksPerSlot - currentCount;
+    if (count > remaining) {
+      alert('Slot ' + slot + ' only has ' + remaining + ' of ' + CONFIG.trucksPerSlot + ' bays available. Reduce count or pick another slot.');
+      return;
+    }
 
-  var newTrucks = [];
-  for (var i = 0; i < count; i++) {
-    newTrucks.push({
-      buyer: buyer,
-      date: date,
-      timeSlot: slot,
-      code: '',
-      truckNum: '',
-      driver: '',
-      phone: '',
-      carrier: '',
-      status: 'Scheduled',
-      notes: ''
-    });
-  }
+    var newTrucks = [];
+    for (var i = 0; i < count; i++) {
+      newTrucks.push({
+        buyer: buyer,
+        date: date,
+        timeSlot: slot,
+        code: '',
+        truckNum: '',
+        driver: '',
+        phone: '',
+        carrier: '',
+        status: STATUS.SCHEDULED,
+        notes: ''
+      });
+    }
 
-  await insertTrucksBulk(newTrucks);
-  closeModal('bulkAddModal');
-  await loadData();
-  renderSchedule();
+    await insertTrucksBulk(newTrucks);
+    closeModal('bulkAddModal');
+    renderActiveTab();
+  } finally {
+    isSaving = false;
+  }
 }
 
 function populateTimeSlots(selectId) {
@@ -1623,23 +1665,23 @@ function renderOverview() {
   buyerNames.forEach(function(b) { buyerCounts[b] = { loaded: 0, missed: 0 }; });
 
   trucks.forEach(function(t) {
-    if (t.status === 'Loaded') loaded++;
-    else if (t.status === 'Missed') missed++;
-    else if (t.status === 'Scheduled') scheduled++;
+    if (t.status === STATUS.LOADED) loaded++;
+    else if (t.status === STATUS.MISSED) missed++;
+    else if (t.status === STATUS.SCHEDULED) scheduled++;
 
     if (t.date === todayDate) {
       todayTotal++;
-      if (t.status === 'Loaded') todayLoaded++;
-      else if (t.status === 'Missed') todayMissed++;
-      else if (t.status === 'Scheduled') todayPending++;
+      if (t.status === STATUS.LOADED) todayLoaded++;
+      else if (t.status === STATUS.MISSED) todayMissed++;
+      else if (t.status === STATUS.SCHEDULED) todayPending++;
     }
 
     if (buyerCounts[t.buyer]) {
-      if (t.status === 'Loaded') buyerCounts[t.buyer].loaded++;
-      else if (t.status === 'Missed') buyerCounts[t.buyer].missed++;
+      if (t.status === STATUS.LOADED) buyerCounts[t.buyer].loaded++;
+      else if (t.status === STATUS.MISSED) buyerCounts[t.buyer].missed++;
     }
 
-    if (t.status === 'Loaded') loadedDates[t.date] = (loadedDates[t.date] || 0) + 1;
+    if (t.status === STATUS.LOADED) loadedDates[t.date] = (loadedDates[t.date] || 0) + 1;
 
     // dateMap for daily history
     if (!dateMap[t.date]) {
@@ -1647,12 +1689,12 @@ function renderOverview() {
       buyerNames.forEach(function(b) { dateMap[t.date][b] = { loaded: 0, missed: 0, total: 0 }; });
     }
     dateMap[t.date].total++;
-    if (t.status === 'Loaded') dateMap[t.date].loaded++;
-    if (t.status === 'Missed') dateMap[t.date].missed++;
+    if (t.status === STATUS.LOADED) dateMap[t.date].loaded++;
+    if (t.status === STATUS.MISSED) dateMap[t.date].missed++;
     if (dateMap[t.date][t.buyer]) {
       dateMap[t.date][t.buyer].total++;
-      if (t.status === 'Loaded') dateMap[t.date][t.buyer].loaded++;
-      if (t.status === 'Missed') dateMap[t.date][t.buyer].missed++;
+      if (t.status === STATUS.LOADED) dateMap[t.date][t.buyer].loaded++;
+      if (t.status === STATUS.MISSED) dateMap[t.date][t.buyer].missed++;
     }
   });
 
@@ -1786,11 +1828,13 @@ function renderOverview() {
 function buildDailyReport() {
   var dateStr = formatDate(currentDate);
   var dayTrucks = trucks.filter(function(t) { return t.date === dateStr; });
-  var loaded = dayTrucks.filter(function(t) { return t.status === 'Loaded'; }).length;
-  var missed = dayTrucks.filter(function(t) { return t.status === 'Missed'; }).length;
-  var missedCodes = dayTrucks.filter(function(t) { return t.status === 'Missed'; }).map(function(t) { return t.code || 'no-code'; });
+  var counts = countByStatus(dayTrucks);
+  var loaded = counts.loaded;
+  var missed = counts.missed;
+  var missedTrucks = dayTrucks.filter(function(t) { return t.status === STATUS.MISSED; });
+  var missedCodes = missedTrucks.map(function(t) { return t.code || 'no-code'; });
 
-  var totalLoaded = trucks.filter(function(t) { return t.status === 'Loaded'; }).length;
+  var totalLoaded = trucks.filter(function(t) { return t.status === STATUS.LOADED; }).length;
 
   var text = "DAILY REPORT - " + prettyDate(dateStr) + "\n";
   text += "=============================================\n";
@@ -1801,7 +1845,7 @@ function buildDailyReport() {
 
   Object.keys(CONFIG.buyers).forEach(function(buyer) {
     var bDay = dayTrucks.filter(function(t) { return t.buyer === buyer; });
-    var bLoaded = bDay.filter(function(t) { return t.status === 'Loaded'; }).length;
+    var bLoaded = bDay.filter(function(t) { return t.status === STATUS.LOADED; }).length;
     text += buyer + ": " + bLoaded + "/" + bDay.length + " loaded\n";
   });
 
@@ -1820,8 +1864,8 @@ function textDailyReport() {
 }
 
 function exportFullReport() {
-  var loaded = trucks.filter(function(t) { return t.status === 'Loaded'; }).length;
-  var missed = trucks.filter(function(t) { return t.status === 'Missed'; }).length;
+  var loaded = trucks.filter(function(t) { return t.status === STATUS.LOADED; }).length;
+  var missed = trucks.filter(function(t) { return t.status === STATUS.MISSED; }).length;
 
   var text = "SUGAR OPERATIONS - FULL REPORT\n";
   text += "=============================================\n";
@@ -1830,7 +1874,7 @@ function exportFullReport() {
   text += "In system: " + trucks.length + "\n\n";
 
   Object.keys(CONFIG.buyers).forEach(function(buyer) {
-    var bLoaded = trucks.filter(function(t) { return t.buyer === buyer && t.status === 'Loaded'; }).length;
+    var bLoaded = trucks.filter(function(t) { return t.buyer === buyer && t.status === STATUS.LOADED; }).length;
     text += buyer + ": " + bLoaded + " / " + CONFIG.buyers[buyer].total + " loaded\n";
   });
 
