@@ -814,7 +814,7 @@
     <div class="mt-16">
       <label>Notes</label>
       <textarea id="detailNotes" rows="2" placeholder="Add notes..."></textarea>
-      <button class="btn btn-blue btn-full" onclick="saveNotes()">Save Notes</button>
+      <button class="btn btn-blue btn-full" onclick="saveTruckDetails()">Save</button>
     </div>
     <button class="btn btn-gray btn-full mt-16" onclick="closeModal('truckDetailModal')">Close</button>
   </div>
@@ -967,6 +967,11 @@ var CONFIG = {
   }
 };
 
+function escAttr(val) {
+  if (!val) return '';
+  return String(val).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 // Load saved fine amount
 var savedFine = localStorage.getItem('sugar_ops_fine');
 if (savedFine) CONFIG.finePerTruck = parseFloat(savedFine);
@@ -1112,6 +1117,11 @@ async function updateTruckField(id, fields) {
       var dbFields = {};
       if ('status' in fields) dbFields.status = fields.status;
       if ('notes' in fields) dbFields.notes = fields.notes;
+      if ('code' in fields) dbFields.code = fields.code;
+      if ('truckNum' in fields) dbFields.truck_num = fields.truckNum;
+      if ('driver' in fields) dbFields.driver = fields.driver;
+      if ('phone' in fields) dbFields.phone = fields.phone;
+      if ('carrier' in fields) dbFields.carrier = fields.carrier;
       var result = await sb.from('trucks').update(dbFields).eq('id', id);
       if (result.error) throw result.error;
       return;
@@ -1305,36 +1315,64 @@ function openTruckDetail(id) {
   document.getElementById('detailTitle').textContent = (t.code || 'Truck') + ' - ' + t.buyer;
   document.getElementById('detailContent').innerHTML =
     '<div class="card">' +
-    '<div><strong>Code:</strong> ' + (t.code || '—') + '</div>' +
-    '<div><strong>Buyer:</strong> ' + t.buyer + '</div>' +
+    '<div><strong>Buyer:</strong> ' + escAttr(t.buyer) + '</div>' +
     '<div><strong>Date:</strong> ' + prettyDate(t.date) + '</div>' +
-    '<div><strong>Time Slot:</strong> ' + t.timeSlot + '</div>' +
-    '<div><strong>Truck #:</strong> ' + (t.truckNum || '—') + '</div>' +
-    '<div><strong>Driver:</strong> ' + (t.driver || '—') + '</div>' +
-    '<div><strong>Phone:</strong> ' + (t.phone || '—') + '</div>' +
-    '<div><strong>Carrier:</strong> ' + (t.carrier || '—') + '</div>' +
-    '<div><strong>Status:</strong> ' + t.status + '</div>' +
-    (t.notes ? '<div><strong>Notes:</strong> ' + t.notes + '</div>' : '') +
-    '</div>';
+    '<div><strong>Time Slot:</strong> ' + escAttr(t.timeSlot) + '</div>' +
+    '<div><strong>Status:</strong> ' + escAttr(t.status) + '</div>' +
+    '</div>' +
+    '<div class="mt-8"><label>Code</label>' +
+    '<input id="detailCode" value="' + escAttr(t.code) + '" placeholder="Appointment code"></div>' +
+    '<div class="mt-8"><label>Truck #</label>' +
+    '<input id="detailTruckNum" value="' + escAttr(t.truckNum) + '" placeholder="Truck number"></div>' +
+    '<div class="mt-8"><label>Driver</label>' +
+    '<input id="detailDriver" value="' + escAttr(t.driver) + '" placeholder="Driver name"></div>' +
+    '<div class="mt-8"><label>Phone</label>' +
+    '<input id="detailPhone" type="tel" value="' + escAttr(t.phone) + '" placeholder="Phone number"></div>' +
+    '<div class="mt-8"><label>Carrier</label>' +
+    '<input id="detailCarrier" value="' + escAttr(t.carrier) + '" placeholder="Carrier name"></div>';
   document.getElementById('detailNotes').value = t.notes || '';
   document.getElementById('truckDetailModal').classList.add('show');
+}
+
+function getDetailEdits() {
+  return {
+    code: document.getElementById('detailCode').value.trim(),
+    truckNum: document.getElementById('detailTruckNum').value.trim(),
+    driver: document.getElementById('detailDriver').value.trim(),
+    phone: document.getElementById('detailPhone').value.trim(),
+    carrier: document.getElementById('detailCarrier').value.trim(),
+    notes: document.getElementById('detailNotes').value
+  };
+}
+
+function applyEditsToTruck(t, edits) {
+  t.code = edits.code;
+  t.truckNum = edits.truckNum;
+  t.driver = edits.driver;
+  t.phone = edits.phone;
+  t.carrier = edits.carrier;
+  t.notes = edits.notes;
 }
 
 function setStatus(status) {
   var t = trucks.find(function(x) { return x.id === selectedTruckId; });
   if (t) {
+    var edits = getDetailEdits();
+    applyEditsToTruck(t, edits);
     t.status = status;
-    updateTruckField(t.id, { status: status });
+    edits.status = status;
+    updateTruckField(t.id, edits);
   }
   closeModal('truckDetailModal');
   renderDaily();
 }
 
-function saveNotes() {
+function saveTruckDetails() {
   var t = trucks.find(function(x) { return x.id === selectedTruckId; });
   if (t) {
-    t.notes = document.getElementById('detailNotes').value;
-    updateTruckField(t.id, { notes: t.notes });
+    var edits = getDetailEdits();
+    applyEditsToTruck(t, edits);
+    updateTruckField(t.id, edits);
   }
   closeModal('truckDetailModal');
   renderDaily();
