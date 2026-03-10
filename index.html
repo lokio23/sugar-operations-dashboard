@@ -994,14 +994,34 @@ function sortByTimeSlot(truckList) {
   });
 }
 
+function getSlotCount(date, timeSlot) {
+  return trucks.filter(function(t) {
+    return t.date === date && t.timeSlot === timeSlot;
+  }).length;
+}
+
 // Load saved fine amount
 var savedFine = localStorage.getItem('sugar_ops_fine');
 if (savedFine) CONFIG.finePerTruck = parseFloat(savedFine);
+
+// Load saved trucks per slot
+var savedTrucksPerSlot = localStorage.getItem('sugar_ops_trucks_per_slot');
+if (savedTrucksPerSlot) CONFIG.trucksPerSlot = parseInt(savedTrucksPerSlot) || 8;
 
 function setFineAmount(val) {
   var num = parseFloat(val) || 0;
   CONFIG.finePerTruck = num;
   localStorage.setItem('sugar_ops_fine', num);
+  renderOverview();
+}
+
+function setTrucksPerSlot(val) {
+  var num = parseInt(val) || 8;
+  if (num < 1) num = 1;
+  if (num > 50) num = 50;
+  CONFIG.trucksPerSlot = num;
+  localStorage.setItem('sugar_ops_trucks_per_slot', num);
+  renderSchedule();
   renderOverview();
 }
 
@@ -1431,6 +1451,12 @@ async function addTruck() {
     notes: ''
   };
 
+  var slotCount = getSlotCount(t.date, t.timeSlot);
+  if (slotCount >= CONFIG.trucksPerSlot) {
+    alert('Time slot ' + t.timeSlot + ' is full (' + CONFIG.trucksPerSlot + ' bays). Choose a different slot.');
+    return;
+  }
+
   await insertTruck(t);
   closeModal('addTruckModal');
   renderDaily();
@@ -1441,7 +1467,7 @@ async function addTruck() {
 function showBulkAdd() {
   document.getElementById('bulkDate').value = formatDate(scheduleDate);
   populateTimeSlots('bulkTimeSlot');
-  document.getElementById('bulkCount').value = '8';
+  document.getElementById('bulkCount').value = String(CONFIG.trucksPerSlot);
   document.getElementById('bulkAddModal').classList.add('show');
 }
 
@@ -1452,6 +1478,13 @@ async function bulkAdd() {
   var count = parseInt(document.getElementById('bulkCount').value) || 0;
   if (count < 1 || count > 100) {
     alert('Enter a number between 1 and 100');
+    return;
+  }
+
+  var currentCount = getSlotCount(date, slot);
+  var remaining = CONFIG.trucksPerSlot - currentCount;
+  if (count > remaining) {
+    alert('Slot ' + slot + ' only has ' + remaining + ' of ' + CONFIG.trucksPerSlot + ' bays available. Reduce count or pick another slot.');
     return;
   }
 
@@ -1688,6 +1721,10 @@ function renderOverview() {
   }
   html += '</div>';
 
+  html += '<div class="fine-row-compact">';
+  html += '<label>Bays per slot:</label>';
+  html += '<input type="number" class="fine-input" value="' + CONFIG.trucksPerSlot + '" onchange="setTrucksPerSlot(this.value)" min="1" max="50" inputmode="numeric">';
+  html += '</div>';
 
   // Estimated completion
   if (loaded > 0) {
